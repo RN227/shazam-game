@@ -1,4 +1,4 @@
-# GameStuck Helper
+# Gamezam
 
 An AI-powered game assistance tool that helps gamers identify games from screenshots and find relevant walkthroughs using Claude AI and YouTube.
 

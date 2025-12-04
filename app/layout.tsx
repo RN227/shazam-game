@@ -14,7 +14,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "GameStuck Helper - AI-Powered Game Walkthrough Finder",
+  title: "Gamezam - AI-Powered Game Walkthrough Finder",
   description: "Upload a screenshot from your game and get instant AI-powered game identification and walkthrough recommendations",
 };
 
