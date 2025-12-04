@@ -9,6 +9,7 @@ export interface GameAnalysisResult {
   gameName: string;
   context: string;
   suggestions: string[];
+  searchQueries: string[];
 }
 
 export async function analyzeGameImage(

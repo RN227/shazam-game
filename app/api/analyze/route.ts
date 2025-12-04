@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeGameImage } from '@/lib/claude';
-import { searchYouTubeWalkthrough } from '@/lib/youtube';
+import { searchYouTubeWalkthroughs } from '@/lib/youtube';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,10 +29,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Search for YouTube walkthrough
-    const walkthroughVideo = await searchYouTubeWalkthrough(
-      analysisResult.gameName,
-      analysisResult.context
+    // Search for YouTube walkthroughs using search queries from Claude
+    const walkthroughVideos = await searchYouTubeWalkthroughs(
+      analysisResult.searchQueries
     );
 
     return NextResponse.json({
@@ -40,7 +39,7 @@ export async function POST(request: NextRequest) {
       gameName: analysisResult.gameName,
       context: analysisResult.context,
       suggestions: analysisResult.suggestions,
-      walkthrough: walkthroughVideo,
+      walkthroughs: walkthroughVideos,
     });
   } catch (error) {
     console.error('Error analyzing image:', error);
