@@ -4,8 +4,8 @@ import { searchYouTubeWalkthrough } from '@/lib/youtube';
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const image = formData.get('image') as File;
+    const body = await request.json();
+    const { image, mediaType } = body;
 
     if (!image) {
       return NextResponse.json(
@@ -14,13 +14,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert image to base64
-    const bytes = await image.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const base64Image = buffer.toString('base64');
+    if (!mediaType) {
+      return NextResponse.json(
+        { error: 'No mediaType provided' },
+        { status: 400 }
+      );
+    }
 
-    // Analyze image with Claude
-    const analysisResult = await analyzeGameImage(base64Image, image.type);
+    // Analyze image with Claude (image is already base64)
+    const analysisResult = await analyzeGameImage(image, mediaType);
 
     if (!analysisResult.gameName) {
       return NextResponse.json(
