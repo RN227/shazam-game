@@ -9,21 +9,126 @@ interface AnalysisResult {
   gameName: string;
   context: string;
   suggestions: string[];
-  walkthroughs: {
+  walkthrough?: {
     title: string;
     videoId: string;
     thumbnail: string;
     channelTitle: string;
-  }[];
+  };
 }
+
+type LoadingStep = 'upload' | 'analyze' | 'search';
 
 export default function ImageUpload() {
   const [isDragging, setIsDragging] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [loadingStep, setLoadingStep] = useState<LoadingStep>('upload');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
 
+  // Image analysis function
+  const analyzeImage = useCallback(async (file: File, retryCount = 0): Promise<void> => {
+    const MAX_RETRIES = 2;
+    const TIMEOUT_MS = 60000; // 60 seconds
+
+    try {
+      setLoadingStep('upload');
+
+      const formData = new FormData();
+      formData.append('image', file);
+
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+      setLoadingStep('analyze');
+
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      setLoadingStep('search');
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 400) {
+          throw new Error(data.error || 'Could not identify the game from the screenshot');
+        } else if (response.status === 500) {
+          throw new Error('Server error. Please try again.');
+        } else {
+          throw new Error(data.error || 'Failed to analyze image');
+        }
+      }
+
+      setResult(data);
+      setError(null);
+    } catch (err) {
+      // Handle timeout
+      if (err instanceof Error && err.name === 'AbortError') {
+        if (retryCount < MAX_RETRIES) {
+          setError(`Request timed out. Retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return analyzeImage(file, retryCount + 1);
+        } else {
+          setError('Request timed out after multiple attempts. Please try again.');
+        }
+      }
+      // Handle network errors
+      else if (err instanceof Error && err.message.includes('fetch')) {
+        if (retryCount < MAX_RETRIES) {
+          setError(`Network error. Retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return analyzeImage(file, retryCount + 1);
+        } else {
+          setError('Network error. Please check your connection and try again.');
+        }
+      }
+      // Handle other errors
+      else {
+        const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+        setError(errorMessage);
+      }
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, []);
+
+  const handleFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file (PNG, JPG, GIF, or WebP)');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Image size must be less than 10MB');
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Store file for retry functionality
+    setCurrentFile(file);
+
+    // Analyze image
+    setIsAnalyzing(true);
+    setError(null);
+    setResult(null);
+
+    await analyzeImage(file);
+  }, [analyzeImage]);
+
+  // Drag and drop handlers
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -39,47 +144,6 @@ export default function ImageUpload() {
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-  }, []);
-
-  const handleFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file');
-      return;
-    }
-
-    // Create preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-
-    // Analyze image
-    setIsAnalyzing(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
-
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to analyze image');
-      }
-
-      setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsAnalyzing(false);
-    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -99,6 +163,15 @@ export default function ImageUpload() {
       handleFile(files[0]);
     }
   }, [handleFile]);
+
+  const handleRetry = () => {
+    if (currentFile) {
+      setIsAnalyzing(true);
+      setError(null);
+      setResult(null);
+      analyzeImage(currentFile);
+    }
+  };
 
   // Handle clipboard paste (Ctrl+V)
   useEffect(() => {
@@ -132,6 +205,8 @@ export default function ImageUpload() {
     setResult(null);
     setError(null);
     setIsAnalyzing(false);
+    setCurrentFile(null);
+    setLoadingStep('upload');
   };
 
   return (
@@ -189,11 +264,35 @@ export default function ImageUpload() {
             />
           </div>
 
-          {isAnalyzing && <LoadingState />}
+          {isAnalyzing && <LoadingState step={loadingStep} />}
 
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-              <p className="text-red-700 dark:text-red-400">{error}</p>
+              <div className="flex items-start gap-3">
+                <svg
+                  className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-red-700 dark:text-red-400 font-semibold mb-2">Error</p>
+                  <p className="text-red-600 dark:text-red-300 text-sm">{error}</p>
+                  {currentFile && !error.includes('Retrying') && (
+                    <button
+                      onClick={handleRetry}
+                      className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition-colors duration-200"
+                    >
+                      Try Again
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

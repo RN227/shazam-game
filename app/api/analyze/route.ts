@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { analyzeGameImage } from '@/lib/claude';
 import { searchYouTubeWalkthroughs } from '@/lib/youtube';
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { image, mediaType } = body;
+    // Parse form data
+    const formData = await request.formData();
+    const image = formData.get('image') as File;
 
+    // Validate image presence
     if (!image) {
       return NextResponse.json(
         { error: 'No image provided' },
@@ -14,39 +19,99 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!mediaType) {
+    // Validate image type
+    if (!ALLOWED_IMAGE_TYPES.includes(image.type)) {
       return NextResponse.json(
-        { error: 'No mediaType provided' },
+        { error: 'Invalid image type. Please upload a PNG, JPG, GIF, or WebP image.' },
         { status: 400 }
       );
     }
 
-    // Analyze image with Claude (image is already base64)
-    const analysisResult = await analyzeGameImage(image, mediaType);
+    // Validate image size
+    if (image.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: 'Image size exceeds 10MB limit' },
+        { status: 400 }
+      );
+    }
 
+    // Convert image to base64
+    const bytes = await image.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const base64Image = buffer.toString('base64');
+
+    // Analyze image with Claude
+    let analysisResult;
+    try {
+      analysisResult = await analyzeGameImage(base64Image, image.type);
+    } catch (error) {
+      console.error('Claude API error:', error);
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          return NextResponse.json(
+            { error: 'AI service configuration error. Please contact support.' },
+            { status: 500 }
+          );
+        }
+        if (error.message.includes('rate limit')) {
+          return NextResponse.json(
+            { error: 'Too many requests. Please try again in a moment.' },
+            { status: 429 }
+          );
+        }
+      }
+      return NextResponse.json(
+        { error: 'Failed to analyze image with AI. Please try again.' },
+        { status: 500 }
+      );
+    }
+
+    // Validate analysis result
     if (!analysisResult.gameName) {
       return NextResponse.json(
-        { error: 'Could not identify the game from the screenshot' },
+        { error: 'Could not identify the game from the screenshot. Please try a clearer image.' },
         { status: 400 }
       );
     }
 
     // Search for YouTube walkthroughs using search queries from Claude
-    const walkthroughVideos = await searchYouTubeWalkthroughs(
-      analysisResult.searchQueries
-    );
+    let walkthrough = null;
+    try {
+      const searchQueries = analysisResult.searchQueries || [
+        `${analysisResult.gameName} walkthrough`,
+        `${analysisResult.gameName} ${analysisResult.context} guide`
+      ];
+      const walkthroughs = await searchYouTubeWalkthroughs(searchQueries);
+      // Return the first/best result as the featured walkthrough
+      walkthrough = walkthroughs.length > 0 ? walkthroughs[0] : null;
+    } catch (error) {
+      console.error('YouTube search error:', error);
+      // Don't fail the entire request if YouTube search fails
+      // Just return results without walkthrough
+    }
 
     return NextResponse.json({
       success: true,
       gameName: analysisResult.gameName,
       context: analysisResult.context,
       suggestions: analysisResult.suggestions,
-      walkthroughs: walkthroughVideos,
+      walkthrough,
     });
   } catch (error) {
     console.error('Error analyzing image:', error);
+
+    // Handle specific error types
+    if (error instanceof Error) {
+      if (error.message.includes('Failed to parse')) {
+        return NextResponse.json(
+          { error: 'Invalid request format' },
+          { status: 400 }
+        );
+      }
+    }
+
     return NextResponse.json(
-      { error: 'Failed to analyze image. Please try again.' },
+      { error: 'An unexpected error occurred. Please try again.' },
       { status: 500 }
     );
   }
