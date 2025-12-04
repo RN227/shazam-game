@@ -9,12 +9,12 @@ interface AnalysisResult {
   gameName: string;
   context: string;
   suggestions: string[];
-  walkthrough: {
+  walkthroughs: {
     title: string;
     videoId: string;
     thumbnail: string;
     channelTitle: string;
-  } | null;
+  }[];
 }
 
 export default function ImageUpload() {
