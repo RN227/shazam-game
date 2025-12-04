@@ -1,0 +1,10 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="300" fill="#f3f4f6"/>
+  <g>
+    <path d="M200 100 L240 180 L160 180 Z" fill="#9ca3af" opacity="0.5"/>
+    <circle cx="170" cy="120" r="15" fill="#9ca3af" opacity="0.5"/>
+  </g>
+  <text x="200" y="220" font-family="Arial, sans-serif" font-size="18" fill="#6b7280" text-anchor="middle">
+    Game Screenshot Placeholder
+  </text>
+</svg>
