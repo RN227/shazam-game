@@ -5,10 +5,17 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+export interface MissionInfo {
+  name: string;
+  type: 'mission' | 'level' | 'boss' | 'area' | 'puzzle' | 'quest';
+  objective: string;
+}
+
 export interface GameAnalysisResult {
   gameName: string;
-  context: string;
-  suggestions: string[];
+  mission: MissionInfo | null;
+  summary: string;
+  tips: string[];
   searchQueries: string[];
 }
 

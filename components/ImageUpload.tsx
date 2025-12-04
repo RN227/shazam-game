@@ -5,16 +5,25 @@ import Image from 'next/image';
 import ResultCard from './ResultCard';
 import LoadingState from './LoadingState';
 
+interface MissionInfo {
+  name: string;
+  type: 'mission' | 'level' | 'boss' | 'area' | 'puzzle' | 'quest';
+  objective: string;
+}
+
+interface YouTubeVideo {
+  title: string;
+  videoId: string;
+  thumbnail: string;
+  channelTitle: string;
+}
+
 interface AnalysisResult {
   gameName: string;
-  context: string;
-  suggestions: string[];
-  walkthrough?: {
-    title: string;
-    videoId: string;
-    thumbnail: string;
-    channelTitle: string;
-  };
+  mission: MissionInfo | null;
+  summary: string;
+  tips: string[];
+  walkthroughs: YouTubeVideo[];
 }
 
 type LoadingStep = 'upload' | 'analyze' | 'search';

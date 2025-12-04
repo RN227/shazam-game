@@ -76,27 +76,30 @@ export async function POST(request: NextRequest) {
     }
 
     // Search for YouTube walkthroughs using search queries from Claude
-    let walkthrough = null;
+    let walkthroughs: Awaited<ReturnType<typeof searchYouTubeWalkthroughs>> = [];
     try {
+      const missionName = analysisResult.mission?.name || '';
       const searchQueries = analysisResult.searchQueries || [
-        `${analysisResult.gameName} walkthrough`,
-        `${analysisResult.gameName} ${analysisResult.context} guide`
+        `${analysisResult.gameName} ${missionName} walkthrough`,
+        `${analysisResult.gameName} ${missionName} guide`,
+        `${analysisResult.gameName} walkthrough`
       ];
-      const walkthroughs = await searchYouTubeWalkthroughs(searchQueries);
-      // Return the first/best result as the featured walkthrough
-      walkthrough = walkthroughs.length > 0 ? walkthroughs[0] : null;
+      const allWalkthroughs = await searchYouTubeWalkthroughs(searchQueries);
+      // Return top 3 walkthroughs
+      walkthroughs = allWalkthroughs.slice(0, 3);
     } catch (error) {
       console.error('YouTube search error:', error);
       // Don't fail the entire request if YouTube search fails
-      // Just return results without walkthrough
+      // Just return results without walkthroughs
     }
 
     return NextResponse.json({
       success: true,
       gameName: analysisResult.gameName,
-      context: analysisResult.context,
-      suggestions: analysisResult.suggestions,
-      walkthrough,
+      mission: analysisResult.mission,
+      summary: analysisResult.summary,
+      tips: analysisResult.tips,
+      walkthroughs,
     });
   } catch (error) {
     console.error('Error analyzing image:', error);
