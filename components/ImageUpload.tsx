@@ -19,6 +19,68 @@ interface AnalysisResult {
 
 type LoadingStep = 'upload' | 'analyze' | 'search';
 
+// Compress image to fit within size limit
+async function compressImage(file: File, maxSizeKB: number = 1500): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = document.createElement('img');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    img.onload = () => {
+      // Calculate new dimensions (max 1920px on longest side)
+      let { width, height } = img;
+      const maxDimension = 1920;
+      
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = (height / width) * maxDimension;
+          width = maxDimension;
+        } else {
+          width = (width / height) * maxDimension;
+          height = maxDimension;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      ctx?.drawImage(img, 0, 0, width, height);
+
+      // Try different quality levels until we're under the size limit
+      let quality = 0.8;
+      const tryCompress = () => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Failed to compress image'));
+              return;
+            }
+
+            // If still too large and quality can be reduced, try again
+            if (blob.size > maxSizeKB * 1024 && quality > 0.3) {
+              quality -= 0.1;
+              tryCompress();
+              return;
+            }
+
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+
+      tryCompress();
+    };
+
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 export default function ImageUpload() {
   const [isDragging, setIsDragging] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -54,11 +116,23 @@ export default function ImageUpload() {
       clearTimeout(timeoutId);
       setLoadingStep('search');
 
+      // Handle non-JSON responses (like Vercel's "Request Entity Too Large")
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        if (text.includes('Request Entity Too Large') || text.includes('FUNCTION_PAYLOAD_TOO_LARGE')) {
+          throw new Error('Image is too large. Please use a smaller image (under 4MB).');
+        }
+        throw new Error('Server error. Please try again.');
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
         if (response.status === 400) {
           throw new Error(data.error || 'Could not identify the game from the screenshot');
+        } else if (response.status === 413) {
+          throw new Error('Image is too large. Please use a smaller image (under 4MB).');
         } else if (response.status === 500) {
           throw new Error('Server error. Please try again.');
         } else {
@@ -89,6 +163,10 @@ export default function ImageUpload() {
           setError('Network error. Please check your connection and try again.');
         }
       }
+      // Handle JSON parsing errors
+      else if (err instanceof SyntaxError && err.message.includes('JSON')) {
+        setError('Image is too large or server error. Please try a smaller image (under 4MB).');
+      }
       // Handle other errors
       else {
         const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
@@ -105,27 +183,33 @@ export default function ImageUpload() {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError('Image size must be less than 10MB');
-      return;
-    }
+    setIsAnalyzing(true);
+    setError(null);
+    setResult(null);
+    setLoadingStep('upload');
 
-    // Create preview
+    // Create preview from original
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreview(reader.result as string);
     };
     reader.readAsDataURL(file);
 
+    // Compress image if needed (target 1.5MB to stay well under Vercel's limit)
+    let processedFile = file;
+    if (file.size > 1.5 * 1024 * 1024) {
+      try {
+        processedFile = await compressImage(file, 1500);
+        console.log(`Compressed image from ${(file.size / 1024).toFixed(0)}KB to ${(processedFile.size / 1024).toFixed(0)}KB`);
+      } catch (err) {
+        console.error('Compression failed, using original:', err);
+      }
+    }
+
     // Store file for retry functionality
-    setCurrentFile(file);
+    setCurrentFile(processedFile);
 
-    // Analyze image
-    setIsAnalyzing(true);
-    setError(null);
-    setResult(null);
-
-    await analyzeImage(file);
+    await analyzeImage(processedFile);
   }, [analyzeImage]);
 
   // Drag and drop handlers

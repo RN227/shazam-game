@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { analyzeGameImage } from '@/lib/claude';
 import { searchYouTubeWalkthroughs } from '@/lib/youtube';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+// Vercel serverless has a 4.5MB body limit, so we limit to 4MB to be safe
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 export async function POST(request: NextRequest) {
