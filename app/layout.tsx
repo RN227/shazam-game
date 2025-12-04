@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
-});
-
 export const metadata: Metadata = {
-  title: "GameStuck Helper - AI-Powered Game Walkthrough Finder",
-  description: "Upload a screenshot from your game and get instant AI-powered game identification and walkthrough recommendations",
+  title: "GAMESTUCK HELPER - AI-Powered Game Assistant",
+  description: "Upload a screenshot from your game and get instant AI-powered game identification, context analysis, and walkthrough recommendations. Premium gaming experience powered by Claude AI.",
+  keywords: "gaming, AI, game helper, walkthrough, screenshot, game identification, gaming assistant",
+  authors: [{ name: "GameStuck Helper" }],
+  openGraph: {
+    title: "GAMESTUCK HELPER - AI-Powered Game Assistant",
+    description: "Upload a screenshot and get instant AI-powered game help",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "GAMESTUCK HELPER",
+    description: "AI-powered game assistance at your fingertips",
+  },
 };
 
 export default function RootLayout({
@@ -24,10 +24,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="en" className="dark">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
+      <body className="antialiased">
         {children}
       </body>
     </html>
